@@ -1,0 +1,100 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user information and role",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["seeker", "giver"] },
+        "bio": { "type": "string" },
+        "skills": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "role"]
+    },
+    "Certificate": {
+      "title": "Certificate",
+      "description": "Stores verified certificate information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "seekerUid": { "type": "string" },
+        "title": { "type": "string" },
+        "imageUrl": { "type": "string", "format": "uri" },
+        "trustScore": { "type": "number" },
+        "certHash": { "type": "string" },
+        "verified": { "type": "boolean" },
+        "keywords": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["seekerUid", "title", "imageUrl", "certHash"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile documents"
+    },
+    "/certificates/{certId}": {
+      "schema": "Certificate",
+      "description": "Certificate documents"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "In-app notifications for users"
+    }
+  },
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user information and role",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["seeker", "giver"] },
+        "bio": { "type": "string" },
+        "skills": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "role"]
+    },
+    "Certificate": {
+      "title": "Certificate",
+      "description": "Stores verified certificate information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "seekerUid": { "type": "string" },
+        "title": { "type": "string" },
+        "imageUrl": { "type": "string", "format": "uri" },
+        "trustScore": { "type": "number" },
+        "certHash": { "type": "string" },
+        "verified": { "type": "boolean" },
+        "keywords": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["seekerUid", "title", "imageUrl", "certHash"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "In-app notification for users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "toUid": { "type": "string" },
+        "fromUid": { "type": "string" },
+        "fromName": { "type": "string" },
+        "subject": { "type": "string" },
+        "body": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["toUid", "fromUid", "subject", "body"]
+    }
+  }
+}

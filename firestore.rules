@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Fields: uid, email, displayName, role, bio, skills, createdAt
+    //
+    // Collection: certificates
+    // Fields: id, seekerUid, title, imageUrl, trustScore, certHash, verified, keywords, createdAt
+    // Collection: notifications
+    // Fields: id, toUid, fromUid, fromName, subject, body, read, createdAt
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner(data) {
+      return isAuthenticated() && request.auth.uid == data.uid;
+    }
+
+    function isSeekerOwner(data) {
+      return isAuthenticated() && request.auth.uid == data.seekerUid;
+    }
+
+    function isRecipient(data) {
+      return isAuthenticated() && request.auth.uid == data.toUid;
+    }
+
+    function isSender(data) {
+      return isAuthenticated() && request.auth.uid == data.fromUid;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role']) &&
+             data.uid is string && data.uid.size() > 0 &&
+             data.email is string && data.email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$') &&
+             data.displayName is string && data.displayName.size() > 0 &&
+             data.role in ['seeker', 'giver'];
+    }
+
+    function isValidCertificate(data) {
+      return data.keys().hasAll(['seekerUid', 'title', 'imageUrl', 'certHash']) &&
+             data.seekerUid is string &&
+             data.title is string && data.title.size() > 0 &&
+             data.imageUrl is string &&
+             data.certHash is string;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['toUid', 'fromUid', 'subject', 'body']) &&
+             data.toUid is string &&
+             data.fromUid is string &&
+             data.subject is string && data.subject.size() > 0 &&
+             data.body is string && data.body.size() > 0;
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role;
+    }
+
+    match /certificates/{certId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isSeekerOwner(request.resource.data) && isValidCertificate(request.resource.data);
+      allow update: if isAuthenticated() && isSeekerOwner(resource.data) && isValidCertificate(request.resource.data);
+      allow delete: if isAuthenticated() && isSeekerOwner(resource.data);
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isRecipient(resource.data) || isSender(resource.data);
+      allow create: if isSender(request.resource.data) && isValidNotification(request.resource.data);
+      allow update: if isRecipient(resource.data) && 
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) &&
+                      request.resource.data.read is bool;
+    }
+  }
+}

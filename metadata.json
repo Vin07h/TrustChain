@@ -1,0 +1,9 @@
+{
+  "name": "SIH25200 TrustChain",
+  "description": "A blockchain-based platform for verifying student credentials and matching them with job opportunities.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
