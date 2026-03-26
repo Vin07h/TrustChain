@@ -63,8 +63,8 @@
 ### Installation
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/trustchain.git
-    cd trustchain
+    git clone https://github.com/Vin07h/TrustChain.git
+    cd TrustChain
     ```
 2.  **Install dependencies:**
     ```bash
