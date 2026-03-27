@@ -107,5 +107,77 @@ export const geminiService = {
       console.error("Error extracting keywords:", error);
       return [];
     }
+  },
+
+  analyzeCertificate: async (imageBase64: string, expectedName: string): Promise<{ trustScore: number, verified: boolean, extractedName: string, nameMatch: boolean, details: any }> => {
+    try {
+      // Extract mimeType from data URL
+      const mimeType = imageBase64.split(';')[0].split(':')[1] || "image/png";
+      const data = imageBase64.split(',')[1];
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: {
+          parts: [
+            { text: `Analyze this certificate image for authenticity. 
+            1. Extract the name of the recipient.
+            2. Check if it matches "${expectedName}".
+            3. Look for signs of tampering, valid signatures, and official logos.
+            4. Provide a trust score (0-100) based on authenticity.
+            5. Determine if it should be considered "verified" (score >= 80).
+            
+            Return a JSON object with:
+            - trustScore: number
+            - verified: boolean
+            - extractedName: string
+            - nameMatch: boolean
+            - details: { logoDetected: boolean, signatureDetected: boolean, tamperingDetected: boolean, reasoning: string }` },
+            { inlineData: { data, mimeType } }
+          ]
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              trustScore: { type: Type.NUMBER },
+              verified: { type: Type.BOOLEAN },
+              extractedName: { type: Type.STRING },
+              nameMatch: { type: Type.BOOLEAN },
+              details: {
+                type: Type.OBJECT,
+                properties: {
+                  logoDetected: { type: Type.BOOLEAN },
+                  signatureDetected: { type: Type.BOOLEAN },
+                  tamperingDetected: { type: Type.BOOLEAN },
+                  reasoning: { type: Type.STRING }
+                },
+                required: ["logoDetected", "signatureDetected", "tamperingDetected", "reasoning"]
+              }
+            },
+            required: ["trustScore", "verified", "extractedName", "nameMatch", "details"]
+          }
+        }
+      });
+
+      const text = response.text;
+      if (!text) throw new Error("Empty response from Gemini");
+      return JSON.parse(text);
+    } catch (error: any) {
+      console.error("Error analyzing certificate with Gemini:", error);
+      
+      // If it's a 400 error from Gemini, it might be the image format or size
+      const errorMessage = (error.message || "").includes("400") || error.status === 400
+        ? "Gemini was unable to process the image. Please try a different format (JPG/PNG) or a smaller file."
+        : "AI analysis failed.";
+
+      return { 
+        trustScore: 0, 
+        verified: false, 
+        extractedName: "Error", 
+        nameMatch: false, 
+        details: { logoDetected: false, signatureDetected: false, tamperingDetected: true, reasoning: errorMessage } 
+      };
+    }
   }
 };

@@ -14,7 +14,8 @@ import {
   getDocs,
   query,
   where,
-  addDoc
+  addDoc,
+  deleteDoc
 } from './firebase';
 
 enum OperationType {

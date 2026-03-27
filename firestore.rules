@@ -72,7 +72,6 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isSeekerOwner(request.resource.data) && isValidCertificate(request.resource.data);
       allow update: if isAuthenticated() && isSeekerOwner(resource.data) && isValidCertificate(request.resource.data);
-      allow delete: if isAuthenticated() && isSeekerOwner(resource.data);
     }
 
     match /notifications/{notificationId} {

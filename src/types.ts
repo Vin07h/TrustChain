@@ -41,6 +41,7 @@ export interface UserProfile {
 export interface Certificate {
   id: string;
   seekerUid: string;
+  seekerName?: string;
   title: string;
   imageUrl: string;
   trustScore: number;

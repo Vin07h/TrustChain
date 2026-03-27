@@ -51,6 +51,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ userProfile, onProfileUpda
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [candidates, setCandidates] = useState<UserProfile[]>([]);
   const [verifyHash, setVerifyHash] = useState('');
+  const [selectedVerifyFile, setSelectedVerifyFile] = useState<File | null>(null);
   const [verificationResult, setVerificationResult] = useState<{ exists: boolean; details?: any } | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -124,13 +125,50 @@ export const Dashboard: React.FC<DashboardProps> = ({ userProfile, onProfileUpda
     }
   }, [certificates, userProfile.role]);
 
+  const optimizeImage = (base64Str: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1600;
+        const MAX_HEIGHT = 1600;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.src = base64Str;
+    });
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert("Hash copied to clipboard!");
+  };
+
   const handleStartUpload = async () => {
     if (!selectedFile || !certDescription.trim()) return;
 
     setIsUploading(true);
     setIsUploadModalOpen(false);
     try {
-      // 1. Convert file to Base64 for local storage/display
+      // 1. Convert file to Base64
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve, reject) => {
         reader.onload = () => resolve(reader.result as string);
@@ -138,10 +176,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ userProfile, onProfileUpda
         reader.readAsDataURL(selectedFile);
       });
       
-      const downloadUrl = await base64Promise;
+      let downloadUrl = await base64Promise;
 
-      // 2. CNN Verification via Backend
-      const { trustScore, verified } = await api.verifyCNN(downloadUrl);
+      // 1.1 Optimize if it's an image
+      if (selectedFile.type.startsWith('image/')) {
+        downloadUrl = await optimizeImage(downloadUrl);
+      }
+
+      // 2. AI Analysis via Gemini (replacing mock verifyCNN)
+      const analysis = await geminiService.analyzeCertificate(downloadUrl, userProfile.displayName);
+      
+      if (!analysis.nameMatch) {
+        alert(`Verification Failed: The name on the certificate ("${analysis.extractedName}") does not match your profile name ("${userProfile.displayName}"). Please ensure you are uploading your own certificates.`);
+        setIsUploading(false);
+        return;
+      }
 
       // 3. Blockchain Hashing
       const certHash = ethers.keccak256(ethers.toUtf8Bytes(downloadUrl));
@@ -152,11 +201,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ userProfile, onProfileUpda
       // 5. Save via API
       const newCert: Partial<Certificate> = {
         seekerUid: userProfile.uid,
+        seekerName: userProfile.displayName,
         title: selectedFile.name.split('.')[0],
         imageUrl: downloadUrl,
-        trustScore,
+        trustScore: analysis.trustScore,
         certHash,
-        verified,
+        verified: analysis.verified,
         keywords: keywords.length > 0 ? keywords : ["General"],
       };
 
@@ -195,10 +245,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ userProfile, onProfileUpda
   };
 
   const handleVerifyHash = async () => {
-    if (!verifyHash) return;
+    if (!verifyHash && !selectedVerifyFile) return;
     setIsVerifying(true);
     try {
-      const result = await api.verifyHash(verifyHash);
+      let hashToVerify = verifyHash;
+
+      if (selectedVerifyFile) {
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(selectedVerifyFile);
+        });
+        let base64 = await base64Promise;
+
+        // Optimize if it's an image to match the upload process
+        if (selectedVerifyFile.type.startsWith('image/')) {
+          base64 = await optimizeImage(base64);
+        }
+
+        hashToVerify = ethers.keccak256(ethers.toUtf8Bytes(base64));
+      }
+
+      const result = await api.verifyHash(hashToVerify);
       setVerificationResult(result ? { exists: true, details: result } : { exists: false });
     } catch (error) {
       console.error("Verification error:", error);
@@ -648,15 +717,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ userProfile, onProfileUpda
                           <span key={kw} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium">{kw}</span>
                         ))}
                       </div>
-                      <div className="pt-3 border-t border-gray-50 flex items-center justify-between">
-                        <div className="flex items-center gap-1 text-[10px] text-gray-400">
-                          <Hash size={12} />
-                          <span className="truncate w-24">{cert.certHash}</span>
+                        <div className="pt-3 border-t border-gray-50 flex items-center justify-between">
+                          <button 
+                            onClick={() => copyToClipboard(cert.certHash)}
+                            className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-indigo-600 transition-colors group"
+                            title="Click to copy full hash"
+                          >
+                            <Hash size={12} />
+                            <span className="truncate w-24 group-hover:underline">{cert.certHash}</span>
+                          </button>
+                          <button 
+                            onClick={() => window.open(cert.imageUrl, '_blank')}
+                            className="text-indigo-600 hover:text-indigo-700 p-1 hover:bg-indigo-50 rounded transition-colors"
+                            title="View Certificate"
+                          >
+                            <ExternalLink size={14} />
+                          </button>
                         </div>
-                        <button className="text-indigo-600 hover:text-indigo-700">
-                          <ExternalLink size={14} />
-                        </button>
-                      </div>
                     </div>
                   </div>
                 ))}
@@ -1093,6 +1170,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ userProfile, onProfileUpda
                               <h4 className="font-bold text-gray-900">{cert.title}</h4>
                               <div className="flex gap-2">
                                 {cert.verified && <span className="text-[10px] font-black bg-green-100 text-green-700 px-2 py-0.5 rounded uppercase">Verified</span>}
+                                <button 
+                                  onClick={() => window.open(cert.imageUrl, '_blank')}
+                                  className="text-indigo-600 hover:text-indigo-700"
+                                  title="View Certificate"
+                                >
+                                  <ExternalLink size={12} />
+                                </button>
                                 {isEditingResume && (
                                   <div className={cn(
                                     "w-4 h-4 rounded border flex items-center justify-center",
@@ -1103,7 +1187,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ userProfile, onProfileUpda
                                 )}
                               </div>
                             </div>
-                            <p className="text-xs text-gray-500 mt-1">Trust Score: {cert.trustScore}% • Hash: {cert.certHash.substring(0, 16)}...</p>
+                            <p 
+                              className="text-xs text-gray-500 mt-1 cursor-pointer hover:text-indigo-600 transition-colors" 
+                              onClick={() => copyToClipboard(cert.certHash)}
+                              title="Click to copy full hash"
+                            >
+                              Trust Score: {cert.trustScore}% • Hash: {cert.certHash.substring(0, 16)}...
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -1181,27 +1271,71 @@ export const Dashboard: React.FC<DashboardProps> = ({ userProfile, onProfileUpda
             >
               <div className="text-center">
                 <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Hash size={32} />
+                  <Shield size={32} />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900">Blockchain Hash Verifier</h2>
-                <p className="text-gray-500 mt-2">Enter a certificate hash to verify its digital footprint on the SIH25200 TrustChain.</p>
+                <h2 className="text-2xl font-bold text-gray-900">Certificate Verifier</h2>
+                <p className="text-gray-500 mt-2">Upload a certificate file to verify if it was issued and verified through TrustChain.</p>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-2">
+              <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm space-y-6">
+                <div 
+                  onClick={() => document.getElementById('verify-file-input')?.click()}
+                  className={cn(
+                    "w-full py-12 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-4 transition-all cursor-pointer",
+                    selectedVerifyFile ? "border-indigo-600 bg-indigo-50" : "border-gray-200 hover:border-indigo-300 hover:bg-gray-50"
+                  )}
+                >
+                  <input 
+                    id="verify-file-input"
+                    type="file" 
+                    className="hidden" 
+                    onChange={(e) => setSelectedVerifyFile(e.target.files?.[0] || null)}
+                  />
+                  {selectedVerifyFile ? (
+                    <>
+                      <FileText size={48} className="text-indigo-600" />
+                      <div className="text-center">
+                        <p className="font-bold text-indigo-900">{selectedVerifyFile.name}</p>
+                        <p className="text-xs text-indigo-600">Click to change file</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-full flex items-center justify-center">
+                        <Upload size={24} />
+                      </div>
+                      <div className="text-center">
+                        <p className="font-bold text-gray-700">Click to upload certificate</p>
+                        <p className="text-xs text-gray-400">PDF, PNG, or JPG (Max 10MB)</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-gray-100"></span>
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-white px-2 text-gray-400 font-bold tracking-widest">Or enter hash manually</span>
+                  </div>
+                </div>
+
                 <input 
                   type="text" 
                   value={verifyHash}
                   onChange={(e) => setVerifyHash(e.target.value)}
                   placeholder="Enter Keccak-256 hash..." 
-                  className="flex-1 px-6 py-4 bg-white border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-sm"
+                  className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-sm"
                 />
+
                 <button 
                   onClick={handleVerifyHash}
-                  disabled={!verifyHash || isVerifying}
-                  className="px-8 py-4 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  disabled={(!verifyHash && !selectedVerifyFile) || isVerifying}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {isVerifying ? <Loader2 className="animate-spin" /> : <Shield size={20} />}
-                  Verify
+                  Verify Authenticity
                 </button>
               </div>
 
@@ -1218,9 +1352,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ userProfile, onProfileUpda
                     <>
                       <CheckCircle className="text-green-600 mt-1" size={24} />
                       <div>
-                        <h4 className="font-bold text-green-900 text-lg">Credential Verified</h4>
-                        <p className="text-green-700 text-sm mt-1">This digital footprint exists on the blockchain and is linked to a verified certificate.</p>
+                        <h4 className="font-bold text-green-900 text-lg">TrustChain Verified</h4>
+                        <p className="text-green-700 text-sm mt-1">This certificate is authentic and its digital footprint is secured on the SIH25200 TrustChain.</p>
                         <div className="mt-4 bg-white p-4 rounded-xl border border-green-200 space-y-2">
+                          <p className="text-xs text-gray-500"><span className="font-bold">Issued To:</span> {verificationResult.details.seekerName || 'Verified Candidate'}</p>
                           <p className="text-xs text-gray-500"><span className="font-bold">Title:</span> {verificationResult.details.title}</p>
                           <p className="text-xs text-gray-500"><span className="font-bold">Trust Score:</span> {verificationResult.details.trustScore}%</p>
                           <p className="text-xs text-gray-500"><span className="font-bold">Issued At:</span> {new Date(verificationResult.details.createdAt).toLocaleDateString()}</p>
@@ -1231,8 +1366,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ userProfile, onProfileUpda
                     <>
                       <AlertCircle className="text-red-600 mt-1" size={24} />
                       <div>
-                        <h4 className="font-bold text-red-900 text-lg">Verification Failed</h4>
-                        <p className="text-red-700 text-sm mt-1">No credential found with this hash on the TrustChain blockchain.</p>
+                        <h4 className="font-bold text-red-900 text-lg">Not TrustChain Verified</h4>
+                        <p className="text-red-700 text-sm mt-1">
+                          This certificate's digital footprint was not found in our secure database. 
+                          It may be authentic, but it has not been verified through the SIH25200 TrustChain process.
+                        </p>
+                        <div className="mt-4 p-4 bg-red-100/50 rounded-xl border border-red-200">
+                          <p className="text-xs text-red-800 font-bold">Action Required:</p>
+                          <p className="text-xs text-red-700 mt-1">Please ask the candidate to upload and verify this certificate on their TrustChain profile to ensure its authenticity.</p>
+                        </div>
                       </div>
                     </>
                   )}
