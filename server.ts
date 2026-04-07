@@ -2,6 +2,9 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import axios from "axios";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 // In-memory database for prototype
 const db = {
@@ -11,7 +14,7 @@ const db = {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
