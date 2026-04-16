@@ -1,4 +1,6 @@
 
+
+
 ---
 
 # <p align="center">🛡️ TrustChain</p>
@@ -19,11 +21,7 @@
 
 ---
 
-<p align="center">
-  <video src="https://github.com/user-attachments/assets/YOUR_VIDEO_ID" width="800" autoplay loop muted playsinline></video>
-  <br>
-  <i>TrustChain Demo in Action</i>
-</p>
+
 ---
 
 ## 🌟 Key Pillars
