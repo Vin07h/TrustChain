@@ -19,13 +19,11 @@
 
 ---
 
-## 📺 Project Preview
 <p align="center">
-  <img src="[https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJueHBsZnd6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z&ep=v1_gifs_search&rid=giphy.gif&ct=g](https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJueHBsZnd6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z6Z3Z&ep=v1_gifs_search&rid=giphy.gif&ct=g)" width="800" alt="TrustChain Demo GIF">
+  <video src="https://github.com/user-attachments/assets/YOUR_VIDEO_ID" width="800" autoplay loop muted playsinline></video>
   <br>
-  <i>(Replace this with a screen recording of your app in action!)</i>
+  <i>TrustChain Demo in Action</i>
 </p>
-
 ---
 
 ## 🌟 Key Pillars
